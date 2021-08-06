@@ -1,0 +1,58 @@
+name: PROXY
+ 
+on:
+  push:
+ 
+jobs:
+  build:
+    runs-on: ubuntu-latest
+ 
+    steps:
+      - name: Install PROXY
+        run: docker run -d --name ssr-with-net-speeder -p 8989:8989 malaohu/ssr-with-net-speeder -s 0.0.0.0 -p 8989 ${{ secrets.CONFIG }}
+ 
+      - name: Use Frp
+        run: |
+          wget https://github.com/fatedier/frp/releases/download/v0.37.0/frp_0.37.0_linux_amd64.tar.gz
+          tar xzvf frp_0.37.0_linux_amd64.tar.gz
+          echo "[Unit]
+          Description=frpc service
+          After=network.target syslog.target
+          Wants=network.target
+           
+          [Service]
+          Type=simple
+          ExecStart=/home/runner/frp_0.37.0_linux_amd64/frpc -c /home/runner/frp_0.37.0_linux_amd64/frpc.ini
+           
+          [Install]
+          WantedBy=multi-user.target" > frpc.service
+          sudo mv frpc.service /lib/systemd/system
+          
+          cd frp_0.37.0_linux_amd64
+          echo "${{ secrets.FRP }}" > frpc.ini
+          sudo systemctl start frpc
+ 
+      - name: Use BBR
+        run: |
+          echo "vm.max_map_count=262144
+          net.core.default_qdisc=fq
+          net.ipv4.tcp_congestion_control=bbr" > sysctl.conf
+          sudo mv sysctl.conf /etc/
+          sudo sysctl -p
+          sysctl net.ipv4.tcp_available_congestion_control
+          sysctl net.ipv4.tcp_congestion_control
+          sysctl net.core.default_qdisc
+          lsmod | grep bbr
+ 
+      - name: Always
+        run: |
+          sleep 1h
+          git clone ${{ secrets.REPO }} always
+          cd always
+          echo "I'm finishing" >> always
+          git add .
+          git config --global user.name "gmail"
+          git config --global user.email "gmail@gmail.com"
+          git commit -m "Always"
+          git branch -M main
+          git push -u origin main
